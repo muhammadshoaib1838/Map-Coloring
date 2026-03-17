@@ -4,43 +4,69 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Map Coloring CSP", layout="wide")
 
+# --------------------------
+# 🎨 CUSTOM CSS (BACKGROUND + TEXT STYLE)
+# --------------------------
+st.markdown("""
+<style>
+body {
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+}
+h1 {
+    color: #38bdf8;
+}
+h2 {
+    color: #facc15;
+}
+.stButton>button {
+    border-radius: 10px;
+    font-weight: bold;
+    background: linear-gradient(90deg, #22c55e, #06b6d4);
+    color: white;
+}
+.block-container {
+    padding-top: 2rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🌍 Map Coloring CSP Solver")
 
 # --------------------------
-# MAP DEFINITIONS
+# MAPS
 # --------------------------
 maps = {
     "Australia": {
         "nodes": ["WA", "NT", "SA", "Q", "NSW", "V", "T"],
         "edges": [
-            ("WA", "NT"), ("WA", "SA"),
-            ("NT", "SA"), ("NT", "Q"),
-            ("SA", "Q"), ("SA", "NSW"), ("SA", "V"),
-            ("Q", "NSW"),
-            ("NSW", "V")
+            ("WA","NT"), ("WA","SA"),
+            ("NT","SA"), ("NT","Q"),
+            ("SA","Q"), ("SA","NSW"), ("SA","V"),
+            ("Q","NSW"), ("NSW","V")
         ]
     },
-    "India (Sample)": {
-        "nodes": ["Punjab", "Haryana", "Delhi", "UP", "Rajasthan"],
+
+    "Pakistan (10 Cities)": {
+        "nodes": [
+            "Lahore","Karachi","Islamabad","Peshawar","Quetta",
+            "Multan","Faisalabad","Hyderabad","Sukkur","Gwadar"
+        ],
         "edges": [
-            ("Punjab", "Haryana"),
-            ("Haryana", "Delhi"),
-            ("Haryana", "UP"),
-            ("Rajasthan", "Haryana"),
-            ("Rajasthan", "UP")
-        ]
-    },
-    "USA (Sample)": {
-        "nodes": ["CA", "NV", "AZ", "UT"],
-        "edges": [
-            ("CA", "NV"), ("CA", "AZ"),
-            ("NV", "AZ"), ("NV", "UT"),
-            ("AZ", "UT")
+            ("Lahore","Islamabad"),
+            ("Lahore","Faisalabad"),
+            ("Faisalabad","Multan"),
+            ("Multan","Quetta"),
+            ("Karachi","Hyderabad"),
+            ("Hyderabad","Sukkur"),
+            ("Sukkur","Multan"),
+            ("Quetta","Gwadar"),
+            ("Peshawar","Islamabad"),
+            ("Islamabad","Quetta")
         ]
     }
 }
 
-colors = ["Red", "Green", "Blue"]
+colors = ["Red","Green","Blue"]
 
 # --------------------------
 # SELECT MAP
@@ -53,13 +79,13 @@ G.add_nodes_from(data["nodes"])
 G.add_edges_from(data["edges"])
 
 # --------------------------
-# SESSION STATE
+# STATE
 # --------------------------
 if "coloring" not in st.session_state:
     st.session_state.coloring = {}
 
 # --------------------------
-# USER INPUT
+# UI INPUT
 # --------------------------
 st.subheader("🎯 Assign Colors")
 
@@ -79,33 +105,33 @@ if st.button("Apply Color"):
 # --------------------------
 def check_conflicts(G, coloring):
     conflicts = []
-    for u, v in G.edges():
+    for u,v in G.edges():
         if u in coloring and v in coloring:
             if coloring[u] == coloring[v]:
-                conflicts.append((u, v))
+                conflicts.append((u,v))
     return conflicts
 
 conflicts = check_conflicts(G, st.session_state.coloring)
 
 # --------------------------
-# AUTO SOLVER (BACKTRACKING)
+# AUTO SOLVER
 # --------------------------
-def is_valid(node, color, coloring, G):
-    for neighbor in G.neighbors(node):
-        if neighbor in coloring and coloring[neighbor] == color:
+def is_valid(node, color, coloring):
+    for n in G.neighbors(node):
+        if n in coloring and coloring[n] == color:
             return False
     return True
 
-def backtrack(coloring, nodes, G):
-    if len(coloring) == len(nodes):
+def backtrack(coloring):
+    if len(coloring) == len(G.nodes()):
         return coloring
 
-    node = [n for n in nodes if n not in coloring][0]
+    node = [n for n in G.nodes() if n not in coloring][0]
 
     for c in colors:
-        if is_valid(node, c, coloring, G):
+        if is_valid(node, c, coloring):
             coloring[node] = c
-            result = backtrack(coloring, nodes, G)
+            result = backtrack(coloring)
             if result:
                 return result
             del coloring[node]
@@ -113,15 +139,15 @@ def backtrack(coloring, nodes, G):
     return None
 
 if st.button("Solve Automatically"):
-    solution = backtrack({}, data["nodes"], G)
+    solution = backtrack({})
     if solution:
         st.session_state.coloring = solution
-        st.success("Solution Found!")
+        st.success("✅ Solution Found!")
     else:
-        st.error("No solution exists")
+        st.error("❌ No solution")
 
 # --------------------------
-# DRAW GRAPH
+# GRAPH DRAW
 # --------------------------
 st.subheader("🗺️ Map Visualization")
 
@@ -129,32 +155,23 @@ color_map = []
 for node in G.nodes():
     if node in st.session_state.coloring:
         c = st.session_state.coloring[node]
-        if c == "Red":
-            color_map.append("red")
-        elif c == "Green":
-            color_map.append("green")
-        elif c == "Blue":
-            color_map.append("blue")
+        color_map.append(c.lower())
     else:
         color_map.append("gray")
 
-plt.figure(figsize=(6,6))
+plt.figure(figsize=(7,7))
 pos = nx.spring_layout(G, seed=42)
 
 nx.draw(
-    G,
-    pos,
+    G, pos,
     with_labels=True,
     node_color=color_map,
     node_size=2000,
-    font_size=10,
     font_color="white"
 )
 
-# Highlight conflicts
 nx.draw_networkx_edges(
-    G,
-    pos,
+    G, pos,
     edgelist=conflicts,
     edge_color="red",
     width=3
@@ -163,17 +180,26 @@ nx.draw_networkx_edges(
 st.pyplot(plt)
 
 # --------------------------
-# STATUS
+# STATUS BOX (COLORED)
 # --------------------------
 st.subheader("📊 Status")
 
 if conflicts:
-    st.error(f"❌ Conflicts detected: {conflicts}")
+    st.markdown(
+        f"<div style='background:#ef4444;padding:10px;border-radius:10px;color:white;'>❌ Conflict: {conflicts}</div>",
+        unsafe_allow_html=True
+    )
 else:
-    if len(st.session_state.coloring) == len(G.nodes()):
-        st.success("✅ Valid Coloring!")
+    if len(st.session_state.coloring)==len(G.nodes()):
+        st.markdown(
+            "<div style='background:#22c55e;padding:10px;border-radius:10px;color:white;'>✅ Valid Coloring!</div>",
+            unsafe_allow_html=True
+        )
     else:
-        st.info("⏳ Continue coloring...")
+        st.markdown(
+            "<div style='background:#3b82f6;padding:10px;border-radius:10px;color:white;'>⏳ Continue...</div>",
+            unsafe_allow_html=True
+        )
 
 # --------------------------
 # RESET
