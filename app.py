@@ -5,27 +5,30 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="Map Coloring CSP", layout="wide")
 
 # --------------------------
-# 🎨 CUSTOM CSS (BACKGROUND + TEXT STYLE)
+# 🎨 UI STYLE
 # --------------------------
 st.markdown("""
 <style>
 body {
     background: linear-gradient(135deg, #0f172a, #1e293b);
 }
-h1 {
-    color: #38bdf8;
-}
-h2 {
-    color: #facc15;
-}
-.stButton>button {
+h1 { color: #38bdf8; }
+h2 { color: #facc15; }
+
+.block {
+    padding: 12px;
     border-radius: 10px;
-    font-weight: bold;
-    background: linear-gradient(90deg, #22c55e, #06b6d4);
     color: white;
+    margin-bottom: 10px;
 }
-.block-container {
-    padding-top: 2rem;
+
+.success { background: #22c55e; }
+.error { background: #ef4444; }
+.info { background: #3b82f6; }
+
+textarea {
+    background: white !important;
+    color: black !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -33,35 +36,59 @@ h2 {
 st.title("🌍 Map Coloring CSP Solver")
 
 # --------------------------
-# MAPS
+# 🌍 MAP DATA (MAX 5 REGIONS EACH)
 # --------------------------
 maps = {
-    "Australia": {
-        "nodes": ["WA", "NT", "SA", "Q", "NSW", "V", "T"],
+
+    "Pakistan": {
+        "nodes": ["Lahore","Karachi","Islamabad","Peshawar","Quetta"],
         "edges": [
-            ("WA","NT"), ("WA","SA"),
-            ("NT","SA"), ("NT","Q"),
-            ("SA","Q"), ("SA","NSW"), ("SA","V"),
-            ("Q","NSW"), ("NSW","V")
+            ("Lahore","Islamabad"),
+            ("Islamabad","Peshawar"),
+            ("Karachi","Quetta"),
+            ("Lahore","Quetta"),
+            ("Karachi","Lahore")
         ]
     },
 
-    "Pakistan (10 Cities)": {
-        "nodes": [
-            "Lahore","Karachi","Islamabad","Peshawar","Quetta",
-            "Multan","Faisalabad","Hyderabad","Sukkur","Gwadar"
-        ],
+    "Australia": {
+        "nodes": ["WA","NT","SA","Q","NSW"],
         "edges": [
-            ("Lahore","Islamabad"),
-            ("Lahore","Faisalabad"),
-            ("Faisalabad","Multan"),
-            ("Multan","Quetta"),
-            ("Karachi","Hyderabad"),
-            ("Hyderabad","Sukkur"),
-            ("Sukkur","Multan"),
-            ("Quetta","Gwadar"),
-            ("Peshawar","Islamabad"),
-            ("Islamabad","Quetta")
+            ("WA","NT"),("WA","SA"),
+            ("NT","SA"),("NT","Q"),
+            ("SA","Q"),("SA","NSW"),
+            ("Q","NSW")
+        ]
+    },
+
+    "India": {
+        "nodes": ["Punjab","Delhi","UP","Rajasthan","Haryana"],
+        "edges": [
+            ("Punjab","Haryana"),
+            ("Haryana","Delhi"),
+            ("Haryana","UP"),
+            ("Rajasthan","UP"),
+            ("Punjab","Rajasthan")
+        ]
+    },
+
+    "USA": {
+        "nodes": ["CA","NV","AZ","UT","OR"],
+        "edges": [
+            ("CA","NV"),("CA","AZ"),
+            ("NV","AZ"),("NV","UT"),
+            ("OR","CA")
+        ]
+    },
+
+    "Europe": {
+        "nodes": ["France","Germany","Italy","Spain","Belgium"],
+        "edges": [
+            ("France","Germany"),
+            ("France","Spain"),
+            ("Germany","Belgium"),
+            ("Italy","France"),
+            ("Belgium","France")
         ]
     }
 }
@@ -84,8 +111,11 @@ G.add_edges_from(data["edges"])
 if "coloring" not in st.session_state:
     st.session_state.coloring = {}
 
+if "history" not in st.session_state:
+    st.session_state.history = []
+
 # --------------------------
-# UI INPUT
+# INPUT
 # --------------------------
 st.subheader("🎯 Assign Colors")
 
@@ -99,19 +129,20 @@ with col2:
 
 if st.button("Apply Color"):
     st.session_state.coloring[region] = color
+    st.session_state.history.append(f"{region} → {color}")
 
 # --------------------------
 # CONFLICT CHECK
 # --------------------------
-def check_conflicts(G, coloring):
+def check_conflicts():
     conflicts = []
     for u,v in G.edges():
-        if u in coloring and v in coloring:
-            if coloring[u] == coloring[v]:
+        if u in st.session_state.coloring and v in st.session_state.coloring:
+            if st.session_state.coloring[u] == st.session_state.coloring[v]:
                 conflicts.append((u,v))
     return conflicts
 
-conflicts = check_conflicts(G, st.session_state.coloring)
+conflicts = check_conflicts()
 
 # --------------------------
 # AUTO SOLVER
@@ -131,6 +162,7 @@ def backtrack(coloring):
     for c in colors:
         if is_valid(node, c, coloring):
             coloring[node] = c
+            st.session_state.history.append(f"Placed {node} → {c}")
             result = backtrack(coloring)
             if result:
                 return result
@@ -139,34 +171,31 @@ def backtrack(coloring):
     return None
 
 if st.button("Solve Automatically"):
+    st.session_state.history.clear()
     solution = backtrack({})
     if solution:
         st.session_state.coloring = solution
-        st.success("✅ Solution Found!")
-    else:
-        st.error("❌ No solution")
 
 # --------------------------
-# GRAPH DRAW
+# GRAPH (FIXED SIZE)
 # --------------------------
 st.subheader("🗺️ Map Visualization")
 
 color_map = []
 for node in G.nodes():
     if node in st.session_state.coloring:
-        c = st.session_state.coloring[node]
-        color_map.append(c.lower())
+        color_map.append(st.session_state.coloring[node].lower())
     else:
         color_map.append("gray")
 
-plt.figure(figsize=(7,7))
+plt.figure(figsize=(4,4))  # 👈 FIXED SMALL SIZE
 pos = nx.spring_layout(G, seed=42)
 
 nx.draw(
     G, pos,
     with_labels=True,
     node_color=color_map,
-    node_size=2000,
+    node_size=1500,
     font_color="white"
 )
 
@@ -180,30 +209,43 @@ nx.draw_networkx_edges(
 st.pyplot(plt)
 
 # --------------------------
-# STATUS BOX (COLORED)
+# STATUS
 # --------------------------
 st.subheader("📊 Status")
 
 if conflicts:
-    st.markdown(
-        f"<div style='background:#ef4444;padding:10px;border-radius:10px;color:white;'>❌ Conflict: {conflicts}</div>",
-        unsafe_allow_html=True
-    )
+    st.markdown(f"<div class='block error'>❌ Conflict: {conflicts}</div>", unsafe_allow_html=True)
+elif len(st.session_state.coloring) == len(G.nodes()):
+    st.markdown("<div class='block success'>✅ Valid Coloring</div>", unsafe_allow_html=True)
 else:
-    if len(st.session_state.coloring)==len(G.nodes()):
-        st.markdown(
-            "<div style='background:#22c55e;padding:10px;border-radius:10px;color:white;'>✅ Valid Coloring!</div>",
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            "<div style='background:#3b82f6;padding:10px;border-radius:10px;color:white;'>⏳ Continue...</div>",
-            unsafe_allow_html=True
-        )
+    st.markdown("<div class='block info'>⏳ Continue Coloring</div>", unsafe_allow_html=True)
+
+# --------------------------
+# HISTORY
+# --------------------------
+st.subheader("📜 Algorithm History")
+st.text_area("", "\n".join(st.session_state.history), height=200)
+
+# --------------------------
+# EXPLANATION
+# --------------------------
+st.subheader("📘 Explanation")
+
+st.markdown("""
+- This is a **Constraint Satisfaction Problem (CSP)**  
+- Each region must have a different color than its neighbors  
+- If two connected regions have same color → ❌ Conflict  
+
+### 🎯 Tips:
+- Use **3 colors only**
+- Always check neighbors before assigning color
+- Try different combinations if conflict occurs
+""")
 
 # --------------------------
 # RESET
 # --------------------------
 if st.button("Reset"):
     st.session_state.coloring = {}
+    st.session_state.history = []
     st.rerun()
